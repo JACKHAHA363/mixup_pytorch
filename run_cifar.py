@@ -24,7 +24,7 @@ def parse():
 	parser.add_argument('-s', '--seed', default=123, type=int, help='Random seed')
 	parser.add_argument('--batch_size', default=128, type=int,
 						help='Mini-batch size')
-	parser.add_argument('--epochs', default=20, type=int, help='Number of epochs')
+	parser.add_argument('--epochs', default=50, type=int, help='Number of epochs')
 	parser.add_argument('-a', '--alpha', default=0.6, type=float,
 						help='Alpha')
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
@@ -82,15 +82,14 @@ def eval(model, data_loader):
 			if use_cuda:
 				data, target = data.cuda(), target.cuda()
 
-			x, y1, y2, lam = mixup_data_and_target(data, target, alpha, use_cuda)
-			x, y1, y2 = map(functools.partial(Variable, requires_grad=False), (x, y1, y2))
+			data, target = Variable(data, requires_grad=False), Variable(target, requires_grad=False)
 
-			pred_y = model(x)
-			loss = mixup_loss(loss_fn, pred_y, y1, y2, lam)
+			pred_y = model(data)
+			loss = loss_fn(pred_y, target)
 
 			total_loss += loss.item()
 			_, pred_c = torch.max(pred_y.data, 1)
-			correct += (lam*(pred_c== y1.data).sum().item()+(1-lam)*(pred_c == y2.data).sum().item())
+			correct += (pred_c== target.data).sum().item()
 			count += data.size(0)
 	return total_loss/float(len(train_loader)), correct/float(count)
 
