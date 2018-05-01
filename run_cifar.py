@@ -14,6 +14,10 @@ import argparse, pdb, os, copy
 import numpy as np
 import functools
 
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+
 use_cuda = torch.cuda.is_available()
 loss_fn = F.cross_entropy
 
@@ -25,10 +29,15 @@ def parse():
 	parser.add_argument('--batch_size', default=128, type=int,
 						help='Mini-batch size')
 	parser.add_argument('--epochs', default=50, type=int, help='Number of epochs')
-	parser.add_argument('-a', '--alpha', default=0.6, type=float,
+	parser.add_argument('-a', '--alpha', default=0.8, type=float,
 						help='Alpha')
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
 	parser.add_argument('--print_freq', default=100, help='Print frequency')
+	parser.add_argument('--data_set', default='cifar10', help='[cifar10, cifar100]')
+	parser.add_argument('-r', '--result_path', default='./result/cifar10', type=str,
+						help='Result path')
+	parser.add_argument('--model_name', default='CIFAR10_ResNet18', type=str,
+						help='Model name')
 
 	args = parser.parse_args()
 	return args
@@ -98,20 +107,35 @@ if __name__ == '__main__':
 	
 	args = parse()
 
+	if not os.path.exists(args.result_path):
+   		os.makedirs(args.result_path)
+
 	global alpha, print_freq
 	alpha, print_freq = args.alpha, args.print_freq
 
+	global result_path, model_name
+	result_path, model_name = args.result_path, args.model_name
+
 	output_model_setting(args)
 
-	train_loader, valid_loader, test_loader = load_cifar10_data(
-														batch_size=args.batch_size,
-														test_batch_size=args.batch_size,
-														alpha=args.train_propt)
+	if args.data_set == 'cifar100':
+		train_loader, valid_loader, test_loader = load_cifar100_data(
+															batch_size=args.batch_size,
+															test_batch_size=args.batch_size,
+															alpha=args.train_propt)
+	else:
+		train_loader, valid_loader, test_loader = load_cifar10_data(
+															batch_size=args.batch_size,
+															test_batch_size=args.batch_size,
+															alpha=args.train_propt)
 
 	model = ResNet18()
 
 	if use_cuda:
 		model.cuda()
+
+	TRAIN = {'loss': [], 'accuracy': []}
+	VALID = {'loss': [], 'accuracy': []}
 
 	optimizer = optim.Adam(params=model.parameters(), lr=args.learning_rate)
 
@@ -125,3 +149,26 @@ if __name__ == '__main__':
 		valid_loss, valid_acc = eval(model, train_loader)
 		print("|\t[Train] loss={:.4f}\tacc={:.4f}".format(train_loss, train_acc))
 		print("|\t[Valid] loss={:.4f}\tacc={:.4f}".format(valid_loss, valid_acc))
+
+		TRAIN['loss'].append(train_loss)
+		TRAIN['accuracy'].append(train_acc)
+		VALID['loss'].append(valid_loss)
+		VALID['accuracy'].append(valid_acc)
+
+	plt.plot(list(range(0,args.epochs+1,1)), TRAIN['loss'], 'ro-', label='train')
+	plt.plot(list(range(0,args.epochs+1,1)), VALID['loss'], 'bs-', label='valid')
+	plt.title('average loss at each epoch')
+	plt.xlabel('epoch')
+	plt.ylabel('loss')
+	plt.legend(loc=1)
+	plt.savefig(os.path.join(result_path, model_name+'_loss.png'))
+	plt.clf()
+
+	plt.plot(list(range(0,args.epochs+1,1)), TRAIN['accuracy'], 'ro-', label='train')
+	plt.plot(list(range(0,args.epochs+1,1)), VALID['accuracy'], 'bs-', label='valid')
+	plt.title('average classification accuracy at each epoch')
+	plt.xlabel('epoch')
+	plt.ylabel('accuracy')
+	plt.legend(loc=4)
+	plt.savefig(os.path.join(result_path, model_name+'_accuracy.png'))
+	plt.clf()
