@@ -1,5 +1,4 @@
-from src.util.load_data import load_cifar10_by_class
-from src.util.util import mix_data
+from src.util.load_data import load_cifar10_data
 from src.model.resnet import ResNet18
 
 import torch
@@ -10,6 +9,8 @@ from torchvision import datasets, transforms
 #from torchvision.models.resnet import resnet18
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.distributions.normal import Normal
+
 import argparse, pdb, os, copy
 import numpy as np
 import functools
@@ -33,11 +34,12 @@ def parse():
 						help='Alpha')
 	parser.add_argument('-w', '--weight_decay', default=1e-4, type=float, help='Weight decay')
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
-	parser.add_argument('--print_freq', default=100, help='Print frequency')
+	parser.add_argument('--print_freq', default=100, type=int, help='Print frequency')
 	parser.add_argument('--data_set', default='cifar10', help='[cifar10, cifar100]')
-	parser.add_argument('-r', '--result_path', default='./result/SC_RP', type=str,
+	parser.add_argument('--noise_std', default=0.05, type=float)
+	parser.add_argument('-r', '--result_path', default='./result/gaussian_05', type=str,
 						help='Result path')
-	parser.add_argument('--model_name', default='CIFAR10_SC_RP', type=str,
+	parser.add_argument('--model_name', default='CIFAR10_gaussian_05', type=str,
 						help='Model name')
 
 	args = parser.parse_args()
@@ -50,20 +52,25 @@ def output_model_setting(args):
 	print('Train proportion: {}\n'.format(args.train_propt))
 	print('Use cuda: {}'.format(use_cuda))
 
-def train(model, optimizer, train_loader, train_loader2):
+def train(model, optimizer, train_loader, noise_std):
 	model.train()
 	print('|\tTrain:')
 
 	total_loss, correct, count = 0, 0, 0
 
 	for batch_idx, (data, target) in enumerate(train_loader):
-		data2, _ = next(iter(train_loader2))
 
 		if use_cuda:
-			data, data2, target = data.cuda(), data2.cuda(), target.cuda()
+			data, target = data.cuda(), target.cuda()
 
-		x = mix_data(data, data2, alpha)
+		data, target = Variable(data, requires_grad=False), Variable(target, requires_grad=False)
 
+		noise = Variable(torch.zeros(data.size()))
+		noise.data.normal_(0, std=noise_std)
+		noise = noise.cuda()
+
+		x = data+noise
+		
 		optimizer.zero_grad()
 		pred_y = model(x)
 		loss = loss_fn(pred_y, target)
@@ -119,9 +126,10 @@ if __name__ == '__main__':
 
 	output_model_setting(args)
 
-	train_loader, train_loader2, test_loader = load_cifar10_by_class(
-														batch_size=args.batch_size,
-														test_batch_size=args.batch_size)
+	train_loader, valid_loader, test_loader = load_cifar10_data(
+															batch_size=args.batch_size,
+															test_batch_size=args.batch_size,
+															alpha=args.train_propt)
 
 
 	model = ResNet18()
@@ -140,7 +148,7 @@ if __name__ == '__main__':
 
 		print("| Epoch {}/{}:".format(epoch_i, args.epochs))
 		if epoch_i > 0:
-			train(model, optimizer, train_loader, train_loader2)
+			train(model, optimizer, train_loader, args.noise_std)
 
 		train_loss, train_acc = eval(model, train_loader)
 		valid_loss, valid_acc = eval(model, test_loader)

@@ -1,5 +1,5 @@
-from src.util.load_data import load_cifar10_by_class
-from src.util.util import mix_data
+from src.util.load_data import load_cifar10_data
+from src.util.util import mix_data2
 from src.model.resnet import ResNet18
 
 import torch
@@ -35,9 +35,9 @@ def parse():
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
 	parser.add_argument('--print_freq', default=100, help='Print frequency')
 	parser.add_argument('--data_set', default='cifar10', help='[cifar10, cifar100]')
-	parser.add_argument('-r', '--result_path', default='./result/SC_RP', type=str,
+	parser.add_argument('-r', '--result_path', default='./result/AC_RP', type=str,
 						help='Result path')
-	parser.add_argument('--model_name', default='CIFAR10_SC_RP', type=str,
+	parser.add_argument('--model_name', default='CIFAR10_AC_RP', type=str,
 						help='Model name')
 
 	args = parser.parse_args()
@@ -50,20 +50,18 @@ def output_model_setting(args):
 	print('Train proportion: {}\n'.format(args.train_propt))
 	print('Use cuda: {}'.format(use_cuda))
 
-def train(model, optimizer, train_loader, train_loader2):
+def train(model, optimizer, train_loader):
 	model.train()
 	print('|\tTrain:')
 
 	total_loss, correct, count = 0, 0, 0
 
 	for batch_idx, (data, target) in enumerate(train_loader):
-		data2, _ = next(iter(train_loader2))
 
 		if use_cuda:
-			data, data2, target = data.cuda(), data2.cuda(), target.cuda()
+			data, target = data.cuda(), target.cuda()
 
-		x = mix_data(data, data2, alpha)
-
+		x = mix_data2(data, alpha, use_cuda)
 		optimizer.zero_grad()
 		pred_y = model(x)
 		loss = loss_fn(pred_y, target)
@@ -119,9 +117,10 @@ if __name__ == '__main__':
 
 	output_model_setting(args)
 
-	train_loader, train_loader2, test_loader = load_cifar10_by_class(
-														batch_size=args.batch_size,
-														test_batch_size=args.batch_size)
+	train_loader, valid_loader, test_loader = load_cifar10_data(
+															batch_size=args.batch_size,
+															test_batch_size=args.batch_size,
+															alpha=args.train_propt)
 
 
 	model = ResNet18()
@@ -140,7 +139,7 @@ if __name__ == '__main__':
 
 		print("| Epoch {}/{}:".format(epoch_i, args.epochs))
 		if epoch_i > 0:
-			train(model, optimizer, train_loader, train_loader2)
+			train(model, optimizer, train_loader)
 
 		train_loss, train_acc = eval(model, train_loader)
 		valid_loss, valid_acc = eval(model, test_loader)
