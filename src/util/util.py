@@ -16,6 +16,12 @@ def mixup_data_and_target(x, y, alpha, use_cuda):
 	y = lam*y1+(1.0-lam)*y2
 	return x, y1, y2, lam
 
+def mix_data(x1, x2, alpha):
+	lam = np.random.beta(alpha, alpha) if alpha > 0 else 1
+
+	x = lam*x1+(1.0-lam)*x2
+	return x
+
 
 def mixup_loss(loss_fn, pred, y1, y2, lam):
 	return lam*loss_fn(pred, y1) + (1-lam)*loss_fn(pred, y2)

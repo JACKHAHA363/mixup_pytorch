@@ -1,5 +1,5 @@
-from src.util.load_data import load_cifar10_data, load_cifar100_data
-from src.util.util import mixup_data_and_target, mixup_loss
+from src.util.load_data import load_cifar10_by_class
+from src.util.util import mix_data, mixup_loss
 from src.model.resnet import ResNet18
 
 import torch
@@ -31,13 +31,13 @@ def parse():
 	parser.add_argument('--epochs', default=50, type=int, help='Number of epochs')
 	parser.add_argument('-a', '--alpha', default=0.8, type=float,
 						help='Alpha')
+	parser.add_argument('-w', '--weight_decay', default=1e-4, type=float, help='Weight decay')
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
 	parser.add_argument('--print_freq', default=100, help='Print frequency')
 	parser.add_argument('--data_set', default='cifar10', help='[cifar10, cifar100]')
-	parser.add_argument('-r', '--result_path', default='./result/cifar10', type=str,
+	parser.add_argument('-r', '--result_path', default='./result/SC_RP', type=str,
 						help='Result path')
-	parser.add_argument('-w', '--weight_decay', default=0, type=float, help='Weight decay')
-	parser.add_argument('--model_name', default='CIFAR10_ResNet18', type=str,
+	parser.add_argument('--model_name', default='CIFAR10_SC_RP', type=str,
 						help='Model name')
 
 	args = parser.parse_args()
@@ -50,36 +50,36 @@ def output_model_setting(args):
 	print('Train proportion: {}\n'.format(args.train_propt))
 	print('Use cuda: {}'.format(use_cuda))
 
-def train(model, optimizer, train_loader):
+def train(model, optimizer, train_loader, train_loader2):
 	model.train()
 	print('|\tTrain:')
 
 	total_loss, correct, count = 0, 0, 0
 
 	for batch_idx, (data, target) in enumerate(train_loader):
+		for data2, _ in train_loader2:
 
-		if use_cuda:
-			data, target = data.cuda(), target.cuda()
+			if use_cuda:
+				data, data2, target = data.cuda(), data2.cuda(), target.cuda()
 
-		x, y1, y2, lam = mixup_data_and_target(data, target, alpha, use_cuda)
-		x, y1, y2 = map(functools.partial(Variable, requires_grad=False), (x, y1, y2))
+			x = mix_data(data, data2, alpha)
 
-		optimizer.zero_grad()
-		pred_y = model(x)
-		loss = mixup_loss(loss_fn, pred_y, y1, y2, lam)
+			optimizer.zero_grad()
+			pred_y = model(x)
+			loss = loss_fn(pred_y, target)
 
-		loss.backward()
-		optimizer.step()
+			loss.backward()
+			optimizer.step()
 
-		total_loss += loss.item()
-		_, pred_c = torch.max(pred_y.data, 1)
-		correct += (lam*(pred_c== y1.data).sum().item()+(1-lam)*(pred_c == y2.data).sum().item())
-		count += data.size(0)
+			total_loss += loss.item()
+			_, pred_c = torch.max(pred_y.data, 1)
+			correct += (pred_c== target.data).sum().item()
+			count += data.size(0)
 
-		if (batch_idx+1) % print_freq == 0:
-			print('|\t\tMini-batch #{}: Loss={:.4f}\tAcc={:.4f}'.format(batch_idx+1,
-																		total_loss/float(batch_idx+1),
-																		correct/float(count)))
+			if (batch_idx+1) % print_freq == 0:
+				print('|\t\tMini-batch #{}: Loss={:.4f}\tAcc={:.4f}'.format(batch_idx+1,
+																			total_loss/float(batch_idx+1),
+																			correct/float(count)))
 
 def eval(model, data_loader):
 	model.eval()
@@ -119,16 +119,10 @@ if __name__ == '__main__':
 
 	output_model_setting(args)
 
-	if args.data_set == 'cifar100':
-		train_loader, valid_loader, test_loader = load_cifar100_data(
-															batch_size=args.batch_size,
-															test_batch_size=args.batch_size,
-															alpha=args.train_propt)
-	else:
-		train_loader, valid_loader, test_loader = load_cifar10_data(
-															batch_size=args.batch_size,
-															test_batch_size=args.batch_size,
-															alpha=args.train_propt)
+	train_loader, train_loader2, test_loader = load_cifar10_by_class(
+														batch_size=args.batch_size,
+														test_batch_size=args.batch_size)
+
 
 	model = ResNet18()
 
@@ -141,14 +135,15 @@ if __name__ == '__main__':
 	optimizer = optim.Adam(params=model.parameters(), lr=args.learning_rate,
 						   weight_decay=args.weight_decay)
 
+
 	for epoch_i in range(0, args.epochs+1):
 
 		print("| Epoch {}/{}:".format(epoch_i, args.epochs))
 		if epoch_i > 0:
-			train(model, optimizer, train_loader)
+			train(model, optimizer, train_loader, train_loader2)
 
 		train_loss, train_acc = eval(model, train_loader)
-		valid_loss, valid_acc = eval(model, valid_loader)
+		valid_loss, valid_acc = eval(model, test_loader)
 		print("|\t[Train] loss={:.4f}\tacc={:.4f}".format(train_loss, train_acc))
 		print("|\t[Valid] loss={:.4f}\tacc={:.4f}".format(valid_loss, valid_acc))
 
