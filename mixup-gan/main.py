@@ -22,7 +22,7 @@ DATASET = '8gaussian'  # 8gaussians or 25gaussian,
 DIM = 512  # Model dimensionality
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
 BATCH_SIZE = 128  # Batch size
-ITERS = 20000  # how many generator iterations to train for
+ITERS = 1500  # how many generator iterations to train for
 ALPHA = 0.8
 PRINT_FREQ = 100
 """
@@ -201,9 +201,22 @@ for iteration in range(ITERS):
     if USE_CUDA:
         noise = noise.cuda()
     noisev = autograd.Variable(noise)
-    fake_logits = netD(netG(noisev))
-    G_cost = torch.log(1 - F.sigmoid(fake_logits))
-    G_cost = G_cost.mean()
+
+    if MODE == 'gan':
+        fake_logits = netD(netG(noisev))
+        fake_targets = torch.zeros(BATCH_SIZE)
+        if USE_CUDA:
+            fake_targets = fake_targets.cuda()
+        fake_targets = Variable(fake_targets)
+        G_cost = -criterion(fake_logits, fake_targets)
+    elif MODE == 'gan-mixup':
+        fake_data_v = netG(noisev)
+        lam = np.random.beta(ALPHA, ALPHA)
+        G_batch = lam * Variable(real_data) + (1-lam) * fake_data_v
+        G_targets = torch.ones(BATCH_SIZE)*lam
+        if USE_CUDA:
+            G_targets = G_targets.cuda()
+        G_cost = -criterion(netD(G_batch), Variable(G_targets))
 
     netG.zero_grad()
     G_cost.backward()
