@@ -15,13 +15,12 @@ def InfEightGaussiansGen(batch_size):
         [1,1], [1,-1], [-1,-1], [-1,1]
     ])
 
-    def generator():
-        while True:
-            ind = np.random.choice(8, batch_size, replace=True)
-            data = np.random.randn(batch_size, 2)
-            data = centers[ind] + data * 0.02
-            yield torch.FloatTensor(data)
-    return generator
+    while True:
+        ind = np.random.choice(8, batch_size, replace=True)
+        data = np.random.randn(batch_size, 2)
+        data = centers[ind] + data * 0.02
+        yield data
+
 
 def InfTwentyFiveGaussiansGen(batch_size):
     """
@@ -36,13 +35,11 @@ def InfTwentyFiveGaussiansGen(batch_size):
         [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2],
     ])
 
-    def generator():
-        while True:
-            ind = np.random.choice(25, batch_size, replace=True)
-            data = np.random.randn(batch_size, 2)
-            data = centers[ind] + data * 0.02
-            yield torch.FloatTensor(data)
-    return generator
+    while True:
+        ind = np.random.choice(25, batch_size, replace=True)
+        data = np.random.randn(batch_size, 2)
+        data = centers[ind] + data * 0.02
+        yield data
 
 
 if __name__ == '__main__':
@@ -50,7 +47,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     data_gen = InfEightGaussiansGen(batch_size=500)
     data_gen = InfTwentyFiveGaussiansGen(batch_size=500)
-    data = data_gen().__next__()
-    plt.plot(data.numpy()[:,0], data.numpy()[:,1], '.')
+    data = data_gen.__next__()
+    plt.plot(data[:,0], data[:,1], '.')
     plt.show()
 
