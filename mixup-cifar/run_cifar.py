@@ -1,6 +1,7 @@
 from src.util.load_data import load_cifar10_data, load_cifar100_data
 from src.util.util import mixup_data_and_target, mixup_loss
 from src.model.resnet import ResNet18
+from src.model.densenet import DensNet190
 
 import torch
 import torch.nn as nn
@@ -34,11 +35,13 @@ def parse():
 	parser.add_argument('-t', '--train_propt', default=0.8, help='Train proportion')
 	parser.add_argument('--print_freq', default=100, help='Print frequency')
 	parser.add_argument('--data_set', default='cifar10', help='[cifar10, cifar100]')
-	parser.add_argument('-r', '--result_path', default='./result/cifar10', type=str,
+	parser.add_argument('-r', '--result_path', default='./results/cifar10', type=str,
 						help='Result path')
 	parser.add_argument('-w', '--weight_decay', default=0, type=float, help='Weight decay')
 	parser.add_argument('--model_name', default='CIFAR10_ResNet18', type=str,
 						help='Model name')
+	parser.add_argument('--model', default='resnet', type=str,
+						help='[resnet | densenet]')
 
 	args = parser.parse_args()
 	return args
@@ -130,7 +133,10 @@ if __name__ == '__main__':
 															test_batch_size=args.batch_size,
 															alpha=args.train_propt)
 
-	model = ResNet18()
+	if args.model == 'resnet':
+		model = ResNet18()
+	else:
+		model = DensNet190()
 
 	if use_cuda:
 		model.cuda()
